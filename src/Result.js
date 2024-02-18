@@ -22,7 +22,7 @@ const Result = () => {
   useEffect(() => {
     const saveDataToDatabase = async () => {
       try {
-        const response = await fetch('http://localhost:5000/api/flights', {
+        const response = await fetch('https://airport-coordinator-backend-production.up.railway.app/api/flights', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -49,7 +49,7 @@ const Result = () => {
     // Send request to backend to filter data
     try {
       console.log(`/filterData?duration=${duration}&airport=${airport}&email=${encodeURIComponent(email)}`)
-      const response = await fetch(`http://localhost:5000/filterData?duration=${duration}&airport=${airport}&email=${encodeURIComponent(email)}`,
+      const response = await fetch(`https://airport-coordinator-backend-production.up.railway.app/filterData?duration=${duration}&airport=${airport}&email=${encodeURIComponent(email)}`,
       {
         method: "GET"
       });
