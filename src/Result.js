@@ -48,8 +48,8 @@ const Result = () => {
     e.preventDefault();
     // Send request to backend to filter data
     try {
-      console.log(`/filterData?duration=${duration}&airport=${airport}&email=${encodeURIComponent(email)}`)
-      const response = await fetch(`https://airport-coordinator-backend-production.up.railway.app/filterData?duration=${duration}&airport=${airport}&email=${encodeURIComponent(email)}`,
+      console.log(`/filterData?arrivalDateTime=${encodeURIComponent(arrivalDateTime)}&duration=${duration}&airport=${airport}&email=${encodeURIComponent(email)}`)
+      const response = await fetch(`https://airport-coordinator-backend-production.up.railway.app/filterData?arrivalDateTime=${encodeURIComponent(arrivalDateTime)}&duration=${duration}&airport=${airport}&email=${encodeURIComponent(email)}`,
       {
         method: "GET"
       });
