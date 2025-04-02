@@ -27,7 +27,8 @@ export default function SignIn() {
       // Here you would typically make an API call to authenticate
       // For now, we'll just redirect to the main page
       router.push(`/main?email=${encodeURIComponent(email)}`);
-    } catch (err) {
+    } catch {
+      // Using empty catch block without a parameter
       setError("Failed to sign in. Please try again.");
     }
   };
@@ -85,7 +86,7 @@ export default function SignIn() {
             </form>
 
             <div className="mt-4 text-center text-sm text-muted-foreground">
-              Don't have an account?{" "}
+              Don&apos;t have an account?{" "}
               <Link href="/auth/signup" className="text-primary hover:underline">
                 Sign up
               </Link>

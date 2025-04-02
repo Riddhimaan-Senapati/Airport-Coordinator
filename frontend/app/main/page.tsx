@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
@@ -13,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Suspense, useEffect } from "react";
 
 const airports = [
   { id: "BOS", name: "Boston Logan International Airport" },
@@ -20,12 +21,20 @@ const airports = [
   { id: "EWR", name: "Newark Liberty International Airport" },
 ];
 
-export default function MainPage() {
+function MainPageContent() {
   const [arrivalDateTime, setArrivalDateTime] = useState("");
   const [airport, setAirport] = useState("");
+  const [email, setEmail] = useState("");
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const email = searchParams.get("email");
+  
+  // Use useEffect to safely access the search params on the client side
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const emailParam = searchParams.get("email");
+    if (emailParam) {
+      setEmail(emailParam);
+    }
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,5 +92,13 @@ export default function MainPage() {
         </Card>
       </div>
     </main>
+  );
+}
+
+export default function MainPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <MainPageContent />
+    </Suspense>
   );
 }

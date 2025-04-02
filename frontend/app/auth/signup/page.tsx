@@ -33,7 +33,7 @@ export default function SignUp() {
       // Here you would typically make an API call to create the account
       // For now, we'll just redirect to the main page
       router.push(`/main?email=${encodeURIComponent(email)}`);
-    } catch (err) {
+    } catch {
       setError("Failed to create account. Please try again.");
     }
   };
