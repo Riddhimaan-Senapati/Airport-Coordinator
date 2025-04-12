@@ -30,9 +30,23 @@ export default function SignUp() {
     }
 
     try {
-      // Here you would typically make an API call to create the account
-      // For now, we'll just redirect to the main page
-      router.push(`/main?email=${encodeURIComponent(email)}`);
+      const response = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        setError(data.error || 'Failed to create account');
+        return;
+      }
+
+      // Redirect to signin page after successful signup
+      router.push('/auth/signin');
     } catch {
       setError("Failed to create account. Please try again.");
     }
@@ -56,14 +70,20 @@ export default function SignUp() {
         <Card>
           <CardContent className="pt-6">
             <form onSubmit={handleSubmit} className="space-y-4">
+              {error && (
+                <Alert variant="destructive">
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input
                   id="email"
                   type="email"
-                  placeholder="your.email@umass.edu"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  placeholder="yourname@umass.edu"
                   required
                 />
               </div>
@@ -90,19 +110,13 @@ export default function SignUp() {
                 />
               </div>
 
-              {error && (
-                <Alert variant="destructive">
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-
               <Button type="submit" className="w-full">
                 Sign Up
               </Button>
             </form>
 
             <div className="mt-4 text-center text-sm text-muted-foreground">
-              Already have an account?{" "}
+              Already have an account?{' '}
               <Link href="/auth/signin" className="text-primary hover:underline">
                 Sign in
               </Link>

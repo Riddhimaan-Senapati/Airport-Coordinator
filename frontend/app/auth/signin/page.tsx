@@ -22,48 +22,64 @@ export default function SignIn() {
       setError("Please use your UMass email address.");
       return;
     }
-    
+
     try {
-      // Here you would typically make an API call to authenticate
-      // For now, we'll just redirect to the main page
+      const response = await fetch('/api/auth/signin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        setError(data.error || 'Invalid credentials');
+        return;
+      }
+
+      // Store token in localStorage
+      localStorage.setItem('token', data.token);
+      
+      // Redirect to main page with email
       router.push(`/main?email=${encodeURIComponent(email)}`);
     } catch {
-      // Using empty catch block without a parameter
       setError("Failed to sign in. Please try again.");
     }
   };
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-background to-secondary p-6">
-      <div className="max-w-md mx-auto space-y-8">
-        <div className="text-center space-y-4">
-          <Link href="/">
-            <div className="inline-block p-4 bg-primary/10 rounded-full">
-              <Plane className="w-12 h-12 text-primary" />
-            </div>
-          </Link>
-          <h1 className="text-3xl font-bold">Welcome Back</h1>
-          <p className="text-muted-foreground">
-            Sign in to connect with other students
-          </p>
-        </div>
-
+      <div className="max-w-md mx-auto">
         <Card>
-          <CardContent className="pt-6">
+          <CardContent className="p-6">
+            <div className="text-center space-y-4 mb-8">
+              <Plane className="w-12 h-12 mx-auto text-primary" />
+              <h2 className="text-3xl font-bold">Sign In</h2>
+              <p className="text-muted-foreground">Welcome back</p>
+            </div>
+
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
+              {error && (
+                <Alert variant="destructive">
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+
+              <div>
                 <Label htmlFor="email">Email</Label>
                 <Input
                   id="email"
                   type="email"
-                  placeholder="your.email@umass.edu"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  placeholder="yourname@umass.edu"
                   required
                 />
               </div>
 
-              <div className="space-y-2">
+              <div>
                 <Label htmlFor="password">Password</Label>
                 <Input
                   id="password"
@@ -74,19 +90,13 @@ export default function SignIn() {
                 />
               </div>
 
-              {error && (
-                <Alert variant="destructive">
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-
               <Button type="submit" className="w-full">
                 Sign In
               </Button>
             </form>
 
             <div className="mt-4 text-center text-sm text-muted-foreground">
-              Don&apos;t have an account?{" "}
+              Don&apos;t have an account?{' '}
               <Link href="/auth/signup" className="text-primary hover:underline">
                 Sign up
               </Link>
