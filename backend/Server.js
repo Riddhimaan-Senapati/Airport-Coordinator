@@ -11,7 +11,7 @@ app.use(cors());
 const PORT = process.env.PORT || 5000;
 
 // Connect to MongoDB Atlas
-mongoose.connect('mongodb+srv://rsenapati:55DwojaRhQDW4QnM@amherstscheduler.inlln8s.mongodb.net/Schedule?retryWrites=true&w=majority')
+mongoose.connect(process.env.MONGODB_CONNECTION_URI)
   .then(() => console.log('MongoDB connected'))
   .catch(err => console.log(err));
 

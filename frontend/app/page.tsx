@@ -4,12 +4,16 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Plane, Users, Clock, Shield } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 
 export default function Home() {
   const router = useRouter();
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-background to-secondary">
+      <div className="absolute top-4 right-4">
+        <ThemeSwitcher />
+      </div>
       <div className="container mx-auto px-4 py-16">
         <div className="max-w-4xl mx-auto space-y-12">
           {/* Hero Section */}
