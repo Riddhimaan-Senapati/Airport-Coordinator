@@ -10,6 +10,7 @@
     "test:watch": "vitest",
     "data:airports:sync": "node scripts/sync-airports.mjs",
     "data:airports:import": "node --env-file-if-exists=.env.local scripts/import-airports-to-supabase.mjs",
+    "perf:baseline": "node scripts/perf-baseline.mjs",
     "supabase:start": "supabase start",
     "supabase:stop": "supabase stop",
     "db:reset": "supabase db reset",

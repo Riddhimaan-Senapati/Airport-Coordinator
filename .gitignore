@@ -5,6 +5,8 @@ node_modules/
 /coverage/
 /.audit/
 /.vercel/
+data/airports.json
+/perf-baseline.json
 *.tsbuildinfo
 next-env.d.ts
 .env*
