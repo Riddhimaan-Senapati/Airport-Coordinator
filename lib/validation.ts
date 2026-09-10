@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const airportCodeSchema = z.enum(["BOS", "JFK", "EWR"]);
+export const airportIdSchema = z.coerce.number().int().positive();
 
 export const emailSchema = z
   .string()
@@ -12,7 +12,7 @@ export const emailSchema = z
   });
 
 export const tripInputSchema = z.object({
-  airportCode: airportCodeSchema,
+  airportId: airportIdSchema,
   arrivalAtUtc: z.iso
     .datetime({ offset: true })
     .transform((value) => new Date(value))
@@ -26,5 +26,9 @@ export const tripInputSchema = z.object({
   waitHours: z.coerce.number().int().min(1).max(24),
 });
 
-export type AirportCode = z.infer<typeof airportCodeSchema>;
+export const contactConsentSchema = z.object({
+  matchId: z.uuid("Invalid match."),
+  decision: z.enum(["accept", "revoke"]),
+});
+
 export type TripInput = z.infer<typeof tripInputSchema>;

@@ -1,114 +1,179 @@
-import { ObjectId } from "mongodb";
+import "server-only";
 
-import { getDatabase } from "./db";
-import type { AirportCode, TripInput } from "./validation";
+import { z } from "zod";
+
+import { createClient } from "./supabase/server";
+import type { TripInput } from "./validation";
 
 const HOUR_IN_MILLISECONDS = 3_600_000;
+const MINUTE_IN_MILLISECONDS = 60_000;
 
-type ArrivalWindowInput = {
-  start: Date;
+type ArrivalWindowInput = { start: Date; waitHours: number };
+export type ArrivalWindow = { start: Date; end: Date };
+
+export function createArrivalWindow({ start, waitHours }: ArrivalWindowInput): ArrivalWindow {
+  return { start, end: new Date(start.getTime() + waitHours * HOUR_IN_MILLISECONDS) };
+}
+
+export function arrivalWindowsOverlap(left: ArrivalWindow, right: ArrivalWindow) {
+  return left.start <= right.end && right.start <= left.end;
+}
+
+export function arrivalWindowIsActive(end: Date, now = new Date()) {
+  return end > now;
+}
+
+export type TripAirport = {
+  id: number;
+  code: string;
+  name: string;
+  municipality: string | null;
+  countryCode: string;
+  timezone: string | null;
+  latitude: number;
+  longitude: number;
+};
+
+export type TripView = {
+  id: string;
+  airport: TripAirport;
+  arrivalAtUtc: string;
   waitHours: number;
 };
 
-export function createArrivalWindow({ start, waitHours }: ArrivalWindowInput) {
+export type MatchContact =
+  | { status: "available" }
+  | { status: "waiting" }
+  | { status: "requested" }
+  | { status: "connected"; email: string };
+
+export type MatchView = {
+  id: string;
+  airport: TripAirport;
+  arrivalAtUtc: string;
+  differenceMinutes: number;
+  contact: MatchContact;
+};
+
+export type TripDashboard = { trip: TripView | null; matches: MatchView[] };
+
+const instantSchema = z.iso.datetime({ offset: true });
+const airportSchema = z.object({
+  id: z.number().int().positive(),
+  code: z.string().min(1),
+  name: z.string().min(1),
+  municipality: z.string().nullable(),
+  countryCode: z.string().length(2),
+  timezone: z.string().nullable(),
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+});
+const rpcTripSchema = z.object({
+  id: z.uuid(),
+  airport: airportSchema,
+  arrivalAt: instantSchema,
+  waitHours: z.number().int().min(1).max(24),
+  waitUntil: instantSchema,
+  revision: z.number().int().positive(),
+});
+const rpcMatchSchema = z
+  .object({
+    id: z.uuid(),
+    overlapStart: instantSchema,
+    overlapEnd: instantSchema,
+    hasConsented: z.boolean(),
+    otherHasConsented: z.boolean(),
+    contactEmail: z.email().nullable(),
+    otherTrip: z.object({ arrivalAt: instantSchema, waitUntil: instantSchema }),
+  })
+  .refine(
+    (match) =>
+      match.hasConsented && match.otherHasConsented
+        ? match.contactEmail !== null
+        : match.contactEmail === null,
+    { message: "Contact disclosure does not match the consent state." },
+  );
+const rpcDashboardSchema = z
+  .object({
+    trip: rpcTripSchema.nullable(),
+    matches: z.array(rpcMatchSchema),
+  })
+  .refine((dashboard) => dashboard.trip !== null || dashboard.matches.length === 0, {
+    message: "A dashboard without a trip cannot contain matches.",
+  });
+
+type RpcMatch = z.infer<typeof rpcMatchSchema>;
+type Disclosure = Pick<RpcMatch, "hasConsented" | "otherHasConsented" | "contactEmail">;
+
+export function contactFromDisclosure(match: Disclosure): MatchContact {
+  if (match.hasConsented && match.otherHasConsented && match.contactEmail) {
+    return { status: "connected", email: match.contactEmail };
+  }
+  if (match.hasConsented) return { status: "waiting" };
+  if (match.otherHasConsented) return { status: "requested" };
+  return { status: "available" };
+}
+
+export function mapTripDashboard(value: unknown): TripDashboard {
+  const dashboard = rpcDashboardSchema.parse(value);
+  if (!dashboard.trip) return { trip: null, matches: [] };
+
+  const trip = dashboard.trip;
   return {
-    start,
-    end: new Date(start.getTime() + waitHours * HOUR_IN_MILLISECONDS),
+    trip: {
+      id: trip.id,
+      airport: trip.airport,
+      arrivalAtUtc: trip.arrivalAt,
+      waitHours: trip.waitHours,
+    },
+    matches: dashboard.matches.map((match) => ({
+      id: match.id,
+      airport: trip.airport,
+      arrivalAtUtc: match.otherTrip.arrivalAt,
+      differenceMinutes: Math.round(
+        Math.abs(
+          new Date(match.otherTrip.arrivalAt).getTime() - new Date(trip.arrivalAt).getTime(),
+        ) / MINUTE_IN_MILLISECONDS,
+      ),
+      contact: contactFromDisclosure(match),
+    })),
   };
 }
 
-type TripRecord = {
-  _id: ObjectId;
-  userId: ObjectId;
-  airportCode: AirportCode;
-  arrivalAtUtc: Date;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-export type Match = {
-  tripId: string;
-  email: string;
-  airportCode: AirportCode;
-  arrivalAtUtc: string;
-  differenceMinutes: number;
-};
-
-let indexesReady: Promise<unknown> | undefined;
-
-async function trips() {
-  const collection = (await getDatabase()).collection<TripRecord>("trips");
-  indexesReady ??= Promise.all([
-    collection.createIndex({ userId: 1 }, { unique: true }),
-    collection.createIndex({ airportCode: 1, arrivalAtUtc: 1 }),
-  ]);
-  try {
-    await indexesReady;
-  } catch (error) {
-    indexesReady = undefined;
-    throw error;
-  }
-  return collection;
+export async function saveTripAndFindMatches({ trip }: { trip: TripInput }) {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("save_trip_and_find_matches", {
+    p_airport_id: trip.airportId,
+    p_arrival_at: trip.arrivalAtUtc.toISOString(),
+    p_wait_hours: trip.waitHours,
+  });
+  if (error) throw error;
 }
 
-type SaveTripInput = {
-  userId: string;
-  trip: TripInput;
-};
+export async function getTripDashboard(): Promise<TripDashboard> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("get_trip_dashboard");
+  if (error) throw error;
+  return mapTripDashboard(data);
+}
 
-export async function saveTripAndFindMatches({ userId, trip }: SaveTripInput) {
-  const userObjectId = new ObjectId(userId);
-  const collection = await trips();
-  const now = new Date();
+export async function deleteTripForUser() {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("delete_my_trip");
+  if (error) throw error;
+}
 
-  await collection.updateOne(
-    { userId: userObjectId },
-    {
-      $set: {
-        airportCode: trip.airportCode,
-        arrivalAtUtc: trip.arrivalAtUtc,
-        updatedAt: now,
-      },
-      $setOnInsert: { createdAt: now },
-    },
-    { upsert: true },
-  );
-
-  const window = createArrivalWindow({ start: trip.arrivalAtUtc, waitHours: trip.waitHours });
-  const matchingTrips = await collection
-    .find({
-      userId: { $ne: userObjectId },
-      airportCode: trip.airportCode,
-      arrivalAtUtc: { $gte: window.start, $lte: window.end },
-    })
-    .sort({ arrivalAtUtc: 1, _id: 1 })
-    .limit(50)
-    .toArray();
-
-  const database = await getDatabase();
-  const matchingUsers = await database
-    .collection<{ _id: ObjectId; email: string }>("user")
-    .find({ _id: { $in: matchingTrips.map((match) => match.userId) } })
-    .project({ email: 1 })
-    .toArray();
-  const emailByUser = new Map(matchingUsers.map((user) => [user._id.toHexString(), user.email]));
-
-  return matchingTrips.flatMap((match): Match[] => {
-    const email = emailByUser.get(match.userId.toHexString());
-    if (!email) {
-      return [];
-    }
-
-    return [
-      {
-        tripId: match._id.toHexString(),
-        email,
-        airportCode: match.airportCode,
-        arrivalAtUtc: match.arrivalAtUtc.toISOString(),
-        differenceMinutes: Math.round(
-          (match.arrivalAtUtc.getTime() - trip.arrivalAtUtc.getTime()) / 60_000,
-        ),
-      },
-    ];
+export async function setContactConsent({
+  matchId,
+  consent,
+}: {
+  matchId: string;
+  consent: boolean;
+}) {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("set_match_consent", {
+    p_match_id: matchId,
+    p_consented: consent,
   });
+  if (error) throw error;
 }

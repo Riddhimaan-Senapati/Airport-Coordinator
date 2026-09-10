@@ -8,7 +8,12 @@
     "start": "next start",
     "test": "vitest run",
     "test:watch": "vitest",
-    "data:reset": "node scripts/reset-data.mjs",
+    "data:airports:sync": "node scripts/sync-airports.mjs",
+    "data:airports:import": "node --env-file-if-exists=.env.local scripts/import-airports-to-supabase.mjs",
+    "supabase:start": "supabase start",
+    "supabase:stop": "supabase stop",
+    "db:reset": "supabase db reset",
+    "db:test": "supabase test db",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint --deny-warnings .",
     "lint:fix": "oxlint --fix .",
@@ -18,26 +23,26 @@
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.116.0",
     "@tailwindcss/postcss": "^4.3.3",
-    "better-auth": "^1.7.3",
-    "mongodb": "^7.6.0",
     "next": "^16.3.4",
-    "nodemailer": "^10.0.1",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "tailwindcss": "^4.3.3",
-    "zod": "^4.5.4"
+    "zod": "^4.6.1"
   },
   "devDependencies": {
-    "@types/node": "^24.13.3",
-    "@types/nodemailer": "^8.0.1",
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.7",
+    "@photostructure/tz-lookup": "^11.6.1",
+    "@types/node": "^22.20.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "oxfmt": "^0.67.0",
     "oxlint": "^1.82.0",
     "oxlint-tsgolint": "^7.0.2001",
-    "typescript": "^5.9.3",
-    "vitest": "^4.1.11"
+    "supabase": "^2.117.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.0"
   },
   "engines": {
     "node": ">=20.19.0"
