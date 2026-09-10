@@ -1,0 +1,16 @@
+New streaming import, run against the local Supabase stack.
+
+$ node --env-file=.env.development.local scripts/import-airports.mjs
+Imported 72,558 airports
+Activated generation 3d38a6bc-3e13-497a-9350-a5aa430cdb38 with 72,558 airports, pruned 0 rows in 10.4s.
+
+No data/airports.json is written. The parser streams the OurAirports CSV
+through normalization and 1,000-row Supabase batches, then activates one
+immutable generation and prunes the old catalog.
+
+Measured phases on this machine:
+countries download and parse        0.12 to 0.40 s
+airports download, parse, normalize 0.56 s
+73 Supabase upserts                 11.7 s (161 ms per 1,000-row batch)
+activate generation                 30 ms
+prune prior generation              3.5 to 4.1 s (only when a prior generation exists)
