@@ -4,7 +4,13 @@ import { useState, useTransition } from "react";
 
 import { getTextField } from "../../../lib/form-data";
 import { createClient } from "../../../lib/supabase/client";
-import { emailSchema } from "../../../lib/validation";
+
+type SignupError = { message?: string } | null;
+
+export function signupErrorMessage(error: SignupError): string {
+  const message = error?.message?.trim();
+  return message ? message : "Could not create the account. Check the details or try again later.";
+}
 
 export function SignupForm() {
   const [message, setMessage] = useState("");
@@ -18,11 +24,7 @@ export function SignupForm() {
     const password = getTextField(formData, "password");
     const confirmPassword = getTextField(formData, "confirmPassword");
     const name = getTextField(formData, "name").trim();
-    const email = emailSchema.safeParse(getTextField(formData, "email"));
-    if (!email.success) {
-      setMessage(email.error.issues[0]?.message ?? "Use a valid @umass.edu email address.");
-      return;
-    }
+    const email = getTextField(formData, "email").trim().toLowerCase();
 
     if (password !== confirmPassword) {
       setMessage("Passwords do not match.");
@@ -38,7 +40,7 @@ export function SignupForm() {
       try {
         const supabase = createClient();
         const { error } = await supabase.auth.signUp({
-          email: email.data,
+          email,
           password,
           options: {
             data: { name },
@@ -47,7 +49,7 @@ export function SignupForm() {
         });
 
         if (error) {
-          setMessage("Could not create the account. Check the details or try again later.");
+          setMessage(signupErrorMessage(error));
           return;
         }
 
