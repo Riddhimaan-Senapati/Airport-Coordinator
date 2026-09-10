@@ -1,6 +1,9 @@
 import { createClient } from "npm:@supabase/supabase-js@2.116.0";
 
-type Notification = { id: string; recipient_user_id: string };
+type Claim = { id: string; match_id: string; recipient_email: string | null };
+type ClaimResult = { claims: Claim[]; cancelled: number };
+
+const DELIVERY_CONCURRENCY = 5;
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -13,6 +16,22 @@ function requiredEnv(name: string) {
   const value = Deno.env.get(name);
   if (!value) throw new Error(name + " is required");
   return value;
+}
+
+async function runBounded<T>(items: T[], limit: number, task: (item: T) => Promise<void>) {
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const item = items[next];
+      next += 1;
+      await task(item);
+    }
+  };
+  const runners: Promise<void>[] = [];
+  for (let lane = 0; lane < Math.min(limit, items.length); lane += 1) {
+    runners.push(worker());
+  }
+  await Promise.all(runners);
 }
 
 Deno.serve(async (request) => {
@@ -40,33 +59,24 @@ Deno.serve(async (request) => {
     });
     if (error) throw error;
 
+    const result = (data ?? {}) as ClaimResult;
+    const claims = result.claims ?? [];
     let sent = 0;
     let failed = 0;
-    let cancelled = 0;
-    for (const notification of (data ?? []) as Notification[]) {
+    const cancelled = result.cancelled ?? 0;
+
+    await runBounded(claims, DELIVERY_CONCURRENCY, async (claim) => {
       try {
-        const userResult = await supabase.auth.admin.getUserById(notification.recipient_user_id);
-        if (userResult.error) throw userResult.error;
-        const recipient = userResult.data.user?.email;
+        const recipient = claim.recipient_email;
         if (!recipient) throw new Error("Recipient has no email address");
 
         const tripsUrl = new URL("/trips", appUrl).toString();
-        const deliveryCheck = await supabase.rpc("notification_is_deliverable", {
-          p_notification_id: notification.id,
-          p_worker_id: workerId,
-        });
-        if (deliveryCheck.error) throw deliveryCheck.error;
-        if (!deliveryCheck.data) {
-          cancelled += 1;
-          continue;
-        }
-
         const response = await fetch("https://api.resend.com/emails", {
           method: "POST",
           headers: {
             authorization: "Bearer " + resendKey,
             "content-type": "application/json",
-            "idempotency-key": notification.id,
+            "idempotency-key": claim.id,
           },
           body: JSON.stringify({
             from: emailFrom,
@@ -86,7 +96,7 @@ Deno.serve(async (request) => {
         }
 
         const completion = await supabase.rpc("complete_notification", {
-          p_notification_id: notification.id,
+          p_notification_id: claim.id,
           p_worker_id: workerId,
         });
         if (completion.error) throw completion.error;
@@ -95,14 +105,14 @@ Deno.serve(async (request) => {
       } catch (cause) {
         failed += 1;
         await supabase.rpc("fail_notification", {
-          p_notification_id: notification.id,
+          p_notification_id: claim.id,
           p_worker_id: workerId,
           p_error: cause instanceof Error ? cause.message : "Unknown delivery failure",
         });
       }
-    }
+    });
 
-    return json({ claimed: (data ?? []).length, sent, failed, cancelled });
+    return json({ claimed: claims.length, sent, failed, cancelled });
   } catch (cause) {
     return json(
       { error: cause instanceof Error ? cause.message : "Notification worker failed" },
