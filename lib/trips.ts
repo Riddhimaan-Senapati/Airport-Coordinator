@@ -2,7 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 
-import { createClient } from "./supabase/server";
+import type { SupabaseServerClient } from "./supabase/server";
 import type { TripInput } from "./validation";
 
 const MINUTE_IN_MILLISECONDS = 60_000;
@@ -124,8 +124,13 @@ export function mapTripDashboard(value: unknown): TripDashboard {
   };
 }
 
-export async function saveTripAndFindMatches({ trip }: { trip: TripInput }) {
-  const supabase = await createClient();
+export async function saveTripAndFindMatches({
+  supabase,
+  trip,
+}: {
+  supabase: SupabaseServerClient;
+  trip: TripInput;
+}) {
   const { error } = await supabase.rpc("save_trip_and_find_matches", {
     p_airport_id: trip.airportId,
     p_arrival_at: trip.arrivalAtUtc.toISOString(),
@@ -134,27 +139,26 @@ export async function saveTripAndFindMatches({ trip }: { trip: TripInput }) {
   if (error) throw error;
 }
 
-export async function getTripDashboard(): Promise<TripDashboard> {
-  const supabase = await createClient();
+export async function getTripDashboard(supabase: SupabaseServerClient): Promise<TripDashboard> {
   const { data, error } = await supabase.rpc("get_trip_dashboard");
   if (error) throw error;
   return mapTripDashboard(data);
 }
 
-export async function deleteTripForUser() {
-  const supabase = await createClient();
+export async function deleteTripForUser(supabase: SupabaseServerClient) {
   const { error } = await supabase.rpc("delete_my_trip");
   if (error) throw error;
 }
 
 export async function setContactConsent({
+  supabase,
   matchId,
   consent,
 }: {
+  supabase: SupabaseServerClient;
   matchId: string;
   consent: boolean;
 }) {
-  const supabase = await createClient();
   const { error } = await supabase.rpc("set_match_consent", {
     p_match_id: matchId,
     p_consented: consent,

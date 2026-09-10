@@ -4,17 +4,11 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
 import type { Database } from "../database.types";
+import { getPublicConfig } from "./public-config";
 
-function getPublicConfig() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+export type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
-  if (!url || !publishableKey) {
-    throw new Error("Supabase public environment variables are not configured.");
-  }
-
-  return { publishableKey, url };
-}
+export type Identity = { email: string | undefined; id: string };
 
 export async function createClient() {
   const cookieStore = await cookies();
@@ -38,12 +32,16 @@ export async function createClient() {
   });
 }
 
-export async function getCurrentUser() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
+export async function getIdentity(supabase: SupabaseServerClient): Promise<Identity | null> {
+  const { data, error } = await supabase.auth.getClaims();
+  if (error || !data) return null;
 
-  return error ? null : user;
+  const id = data.claims.sub;
+  if (!id) return null;
+
+  return { email: data.claims.email, id };
+}
+
+export async function getCurrentUser() {
+  return getIdentity(await createClient());
 }
