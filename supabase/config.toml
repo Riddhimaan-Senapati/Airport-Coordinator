@@ -1,0 +1,16 @@
+project_id = "airport-coordinator"
+
+[auth]
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["http://127.0.0.1:3000/**", "http://localhost:3000/**"]
+
+[auth.email]
+enable_signup = true
+enable_confirmations = true
+
+[auth.hook.before_user_created]
+enabled = true
+uri = "pg-functions://postgres/public/restrict_signup_to_umass"
+
+[functions.process-match-notifications]
+verify_jwt = false

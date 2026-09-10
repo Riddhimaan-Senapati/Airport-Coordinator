@@ -3,35 +3,49 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
-import { authClient } from "../../../lib/auth-client";
 import { getTextField } from "../../../lib/form-data";
+import { createClient } from "../../../lib/supabase/client";
 
-export function SigninForm() {
-  const [error, setError] = useState("");
+type SigninFormProps = {
+  initialError?: string;
+  notice?: string;
+};
+
+export function SigninForm({ initialError = "", notice }: SigninFormProps) {
+  const [error, setError] = useState(initialError);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
 
   function submit(formData: FormData) {
     setError("");
     startTransition(async () => {
-      const result = await authClient.signIn.email({
-        email: getTextField(formData, "email"),
-        password: getTextField(formData, "password"),
-        callbackURL: "/trips",
-      });
+      try {
+        const supabase = createClient();
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: getTextField(formData, "email"),
+          password: getTextField(formData, "password"),
+        });
 
-      if (result.error) {
-        setError(result.error.message ?? "Invalid email or password.");
-        return;
+        if (signInError) {
+          setError("Invalid email or password, or the email has not been verified.");
+          return;
+        }
+
+        router.replace("/trips");
+        router.refresh();
+      } catch {
+        setError("Could not sign in. Try again.");
       }
-
-      router.replace("/trips");
-      router.refresh();
     });
   }
 
   return (
     <form action={submit} className="space-y-4">
+      {notice ? (
+        <output className="block rounded-md bg-green-50 p-3 text-sm text-green-800">
+          {notice}
+        </output>
+      ) : null}
       {error ? (
         <p className="rounded-md bg-red-50 p-3 text-sm text-red-700" role="alert">
           {error}

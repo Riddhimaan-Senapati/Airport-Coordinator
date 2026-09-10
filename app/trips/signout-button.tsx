@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 
-import { authClient } from "../../lib/auth-client";
+import { createClient } from "../../lib/supabase/client";
 
 export function SignoutButton() {
   const router = useRouter();
@@ -11,7 +11,8 @@ export function SignoutButton() {
 
   function signOut() {
     startTransition(async () => {
-      await authClient.signOut();
+      const supabase = createClient();
+      await supabase.auth.signOut();
       router.replace("/");
       router.refresh();
     });

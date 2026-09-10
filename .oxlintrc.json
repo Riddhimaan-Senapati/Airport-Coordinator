@@ -7,5 +7,5 @@
   "rules": {
     "typescript/no-floating-promises": "error"
   },
-  "ignorePatterns": [".next/**", "node_modules/**", "coverage/**"]
+  "ignorePatterns": [".next/**", "node_modules/**", "coverage/**", "lib/database.types.ts"]
 }

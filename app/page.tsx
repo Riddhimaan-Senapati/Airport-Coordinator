@@ -8,8 +8,8 @@ import Link from "next/link";
 
 const benefits = [
   {
-    title: "Find students",
-    description: "See UMass students arriving at the same airport after your flight.",
+    title: "Match overlapping windows",
+    description: "A match appears only when both travelers' airport waiting windows overlap.",
     icon: UserGroupIcon,
   },
   {
@@ -19,7 +19,7 @@ const benefits = [
   },
   {
     title: "Keep access restricted",
-    description: "Accounts require a valid UMass email address and an authenticated session.",
+    description: "Email addresses stay private until both travelers agree to connect.",
     icon: ShieldCheckIcon,
   },
 ] as const;
@@ -53,6 +53,11 @@ export default function HomePage() {
             </article>
           ))}
         </section>
+        <p className="text-center text-sm text-muted-foreground">
+          <Link className="text-link" href="/privacy">
+            Read the privacy notice
+          </Link>
+        </p>
       </div>
     </main>
   );

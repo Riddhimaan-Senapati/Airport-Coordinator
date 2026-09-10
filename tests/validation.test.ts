@@ -23,13 +23,13 @@ describe("tripInputSchema", () => {
   it("parses a valid trip boundary payload", () => {
     const arrival = new Date(Date.now() + 86_400_000);
     const result = tripInputSchema.parse({
-      airportCode: "BOS",
+      airportId: "3484",
       arrivalAtUtc: arrival.toISOString(),
       waitHours: "2",
     });
 
     expect(result).toEqual({
-      airportCode: "BOS",
+      airportId: 3484,
       arrivalAtUtc: arrival,
       waitHours: 2,
     });
@@ -38,17 +38,17 @@ describe("tripInputSchema", () => {
   it.each(["0", "25", "1.5", "unknown"])("rejects wait time %s", (waitHours) => {
     expect(
       tripInputSchema.safeParse({
-        airportCode: "JFK",
+        airportId: "3484",
         arrivalAtUtc: validArrival(),
         waitHours,
       }).success,
     ).toBe(false);
   });
 
-  it("rejects an unknown airport", () => {
+  it("rejects a non-numeric airport identifier", () => {
     expect(
       tripInputSchema.safeParse({
-        airportCode: "LAX",
+        airportId: "LAX",
         arrivalAtUtc: validArrival(),
         waitHours: "2",
       }).success,
@@ -58,7 +58,7 @@ describe("tripInputSchema", () => {
   it("rejects arrivals more than a year away", () => {
     expect(
       tripInputSchema.safeParse({
-        airportCode: "BOS",
+        airportId: "3484",
         arrivalAtUtc: new Date(Date.now() + 31_536_000_000 + 86_400_000).toISOString(),
         waitHours: "2",
       }).success,
