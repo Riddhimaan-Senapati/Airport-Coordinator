@@ -5,23 +5,7 @@ import { z } from "zod";
 import { createClient } from "./supabase/server";
 import type { TripInput } from "./validation";
 
-const HOUR_IN_MILLISECONDS = 3_600_000;
 const MINUTE_IN_MILLISECONDS = 60_000;
-
-type ArrivalWindowInput = { start: Date; waitHours: number };
-export type ArrivalWindow = { start: Date; end: Date };
-
-export function createArrivalWindow({ start, waitHours }: ArrivalWindowInput): ArrivalWindow {
-  return { start, end: new Date(start.getTime() + waitHours * HOUR_IN_MILLISECONDS) };
-}
-
-export function arrivalWindowsOverlap(left: ArrivalWindow, right: ArrivalWindow) {
-  return left.start <= right.end && right.start <= left.end;
-}
-
-export function arrivalWindowIsActive(end: Date, now = new Date()) {
-  return end > now;
-}
 
 export type TripAirport = {
   id: number;
