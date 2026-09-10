@@ -276,29 +276,7 @@ export type Database = {
           p_lease_seconds?: number
           p_worker_id: string
         }
-        Returns: {
-          attempt_count: number
-          available_at: string
-          created_at: string
-          dedupe_key: string
-          id: string
-          kind: string
-          last_error: string | null
-          lease_token: string | null
-          leased_until: string | null
-          match_id: string | null
-          payload: Json
-          recipient_user_id: string
-          sent_at: string | null
-          status: string
-          updated_at: string
-        }[]
-        SetofOptions: {
-          from: "*"
-          to: "notification_outbox"
-          isOneToOne: false
-          isSetofReturn: true
-        }
+        Returns: Json
       }
       complete_notification: {
         Args: { p_notification_id: string; p_worker_id: string }
@@ -314,10 +292,6 @@ export type Database = {
         Returns: boolean
       }
       get_trip_dashboard: { Args: never; Returns: Json }
-      notification_is_deliverable: {
-        Args: { p_notification_id: string; p_worker_id: string }
-        Returns: boolean
-      }
       prune_airport_catalog: {
         Args: { p_batch_size?: number }
         Returns: number

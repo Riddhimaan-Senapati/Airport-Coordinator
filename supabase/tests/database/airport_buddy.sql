@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(31);
+select plan(70);
 
 select has_table('public', 'airports', 'airports table exists');
 select has_table('public', 'trips', 'trips table exists');
@@ -147,58 +147,369 @@ select is(
 );
 
 reset role;
-set local role service_role;
-select set_config('request.jwt.claim.role', 'service_role', true);
-select ok(
-  has_function_privilege('service_role', 'public.notification_is_deliverable(uuid,uuid)', 'EXECUTE'),
-  'service role can verify notification delivery eligibility'
+insert into auth.users (
+  id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at
+)
+values
+  ('00000000-0000-0000-0000-000000000011', 'authenticated', 'authenticated', 'eleven@umass.edu', '', now(), now(), now()),
+  ('00000000-0000-0000-0000-000000000012', 'authenticated', 'authenticated', 'twelve@umass.edu', '', now(), now(), now()),
+  ('00000000-0000-0000-0000-000000000013', 'authenticated', 'authenticated', 'thirteen@umass.edu', '', now(), now(), now()),
+  ('00000000-0000-0000-0000-000000000014', 'authenticated', 'authenticated', 'fourteen@umass.edu', '', now(), now(), now()),
+  ('00000000-0000-0000-0000-000000000015', 'authenticated', 'authenticated', 'fifteen@umass.edu', '', now(), now(), now()),
+  ('00000000-0000-0000-0000-000000000016', 'authenticated', 'authenticated', 'sixteen@umass.edu', '', now(), now(), now()),
+  ('00000000-0000-0000-0000-000000000017', 'authenticated', 'authenticated', 'seventeen@umass.edu', '', now(), now(), now()),
+  ('00000000-0000-0000-0000-000000000018', 'authenticated', 'authenticated', 'eighteen@umass.edu', '', now(), now(), now());
+
+insert into public.airports (
+  id, ident, iata_code, gps_code, name, municipality, country_code, country_name,
+  latitude, longitude, type, timezone, catalog_generation
+) values (
+  -900000003, 'TEST-KPVD', 'PVD', 'KPVD', 'Rhode Island T. F. Green Airport', 'Providence', 'US', 'United States',
+  41.7240, -71.4283, 'medium_airport', 'America/New_York', 'notify-generation'
 );
-create temporary table claimed_notification on commit drop as
-select id, match_id
-from public.claim_notification_batch(
-  '00000000-0000-0000-0000-000000000099',
-  1,
-  120
+
+insert into public.trips (user_id, airport_generation, airport_id, arrival_at, wait_hours, wait_until, revision)
+values
+  ('00000000-0000-0000-0000-000000000011', 'notify-generation', -900000003, now() + interval '1 hour', 6, now() + interval '7 hours', 1),
+  ('00000000-0000-0000-0000-000000000012', 'notify-generation', -900000003, now() + interval '2 hours', 6, now() + interval '8 hours', 1),
+  ('00000000-0000-0000-0000-000000000013', 'notify-generation', -900000003, now() + interval '1 hour', 6, now() + interval '7 hours', 1),
+  ('00000000-0000-0000-0000-000000000014', 'notify-generation', -900000003, now() + interval '2 hours', 6, now() + interval '8 hours', 1),
+  ('00000000-0000-0000-0000-000000000015', 'notify-generation', -900000003, now() - interval '10 hours', 1, now() - interval '9 hours', 1),
+  ('00000000-0000-0000-0000-000000000016', 'notify-generation', -900000003, now() - interval '10 hours', 1, now() - interval '9 hours', 1),
+  ('00000000-0000-0000-0000-000000000017', 'notify-generation', -900000003, now() + interval '1 hour', 6, now() + interval '7 hours', 1),
+  ('00000000-0000-0000-0000-000000000018', 'notify-generation', -900000003, now() + interval '2 hours', 6, now() + interval '8 hours', 1);
+
+insert into public.matches (
+  user_low, user_high, airport_generation, airport_id, revision_low, revision_high, overlap_start, overlap_end
+) values
+  ('00000000-0000-0000-0000-000000000011', '00000000-0000-0000-0000-000000000012', 'notify-generation', -900000003, 1, 1, now() + interval '2 hours', now() + interval '7 hours'),
+  ('00000000-0000-0000-0000-000000000013', '00000000-0000-0000-0000-000000000014', 'notify-generation', -900000003, 1, 1, now() + interval '2 hours', now() + interval '7 hours'),
+  ('00000000-0000-0000-0000-000000000015', '00000000-0000-0000-0000-000000000016', 'notify-generation', -900000003, 1, 1, now() - interval '10 hours', now() - interval '9 hours'),
+  ('00000000-0000-0000-0000-000000000017', '00000000-0000-0000-0000-000000000018', 'notify-generation', -900000003, 1, 1, now() + interval '2 hours', now() + interval '7 hours');
+
+select ok(
+  has_function_privilege('service_role', 'public.claim_notification_batch(uuid,integer,integer)', 'EXECUTE'),
+  'service role can claim delivery-ready notifications'
 );
 select ok(
-  (
-    select public.notification_is_deliverable(
-      id,
-      '00000000-0000-0000-0000-000000000099'
-    )
-    from claimed_notification
-  ),
-  'a leased notification for a current match is deliverable'
+  not has_function_privilege('anon', 'public.claim_notification_batch(uuid,integer,integer)', 'EXECUTE'),
+  'anonymous users cannot claim notifications'
 );
 
 reset role;
-update public.trips
-set revision = revision + 1
-where user_id = (
-  select matched.user_low
-  from public.matches matched
-  join claimed_notification claimed on claimed.match_id = matched.id
-);
+delete from public.notification_outbox;
+insert into public.notification_outbox (
+  match_id, recipient_user_id, kind, dedupe_key, status, available_at, leased_until, lease_token, attempt_count, sent_at
+) values
+  ((select id from public.matches where user_low = '00000000-0000-0000-0000-000000000011'), '00000000-0000-0000-0000-000000000011', 'match_found', 'mix-ok', 'pending', now(), null, null, 0, null),
+  ((select id from public.matches where user_low = '00000000-0000-0000-0000-000000000015'), '00000000-0000-0000-0000-000000000015', 'match_found', 'mix-cancel', 'pending', now(), null, null, 0, null),
+  ((select id from public.matches where user_low = '00000000-0000-0000-0000-000000000011'), '00000000-0000-0000-0000-000000000012', 'match_found', 'mix-future', 'pending', now() + interval '1 day', null, null, 0, null),
+  ((select id from public.matches where user_low = '00000000-0000-0000-0000-000000000011'), '00000000-0000-0000-0000-000000000011', 'match_found', 'mix-sent', 'sent', now(), null, null, 1, now()),
+  ((select id from public.matches where user_low = '00000000-0000-0000-0000-000000000013'), '00000000-0000-0000-0000-000000000013', 'match_found', 'mix-live', 'leased', now(), now() + interval '1 hour', '00000000-0000-0000-0000-0000000000c1', 1, null);
 set local role service_role;
 select set_config('request.jwt.claim.role', 'service_role', true);
-select ok(
-  not (
-    select public.notification_is_deliverable(
-      id,
-      '00000000-0000-0000-0000-000000000099'
-    )
-    from claimed_notification
-  ),
-  'a leased notification becomes ineligible after a trip revision changes'
+create temporary table mixed_claim on commit drop as
+select public.claim_notification_batch('00000000-0000-0000-0000-0000000000a1', 50, 120) as payload;
+select is(
+  jsonb_array_length((select payload->'claims' from mixed_claim)),
+  1,
+  'a mixed batch claims only the delivery-ready row'
 );
 select is(
-  (
-    select outbox.status
-    from public.notification_outbox outbox
-    join claimed_notification claimed on claimed.id = outbox.id
-  ),
+  (select payload->>'cancelled' from mixed_claim),
+  '1',
+  'a mixed batch reports the cancelled ineligible row'
+);
+select is(
+  (select payload->'claims'->0->>'recipient_email' from mixed_claim),
+  'eleven@umass.edu',
+  'a claim projects the recipient address'
+);
+select is(
+  (select status from public.notification_outbox where dedupe_key = 'mix-cancel'),
   'cancelled',
-  'an ineligible leased notification is cancelled atomically'
+  'an ineligible pending row is cancelled during claim'
+);
+select is(
+  (select status from public.notification_outbox where dedupe_key = 'mix-future'),
+  'pending',
+  'a not-yet-available row stays pending'
+);
+select is(
+  (select status from public.notification_outbox where dedupe_key = 'mix-sent'),
+  'sent',
+  'an already-sent row is untouched'
+);
+select is(
+  (select lease_token from public.notification_outbox where dedupe_key = 'mix-live'),
+  '00000000-0000-0000-0000-0000000000c1',
+  'a live lease is not stolen'
+);
+select is(
+  (select status from public.notification_outbox where dedupe_key = 'mix-ok'),
+  'leased',
+  'the eligible row is leased'
+);
+select is(
+  (select lease_token from public.notification_outbox where dedupe_key = 'mix-ok'),
+  '00000000-0000-0000-0000-0000000000a1',
+  'the eligible row carries the claiming worker lease'
+);
+select is(
+  (select attempt_count from public.notification_outbox where dedupe_key = 'mix-ok'),
+  1,
+  'a claim records one delivery attempt'
+);
+
+reset role;
+delete from public.notification_outbox;
+insert into public.notification_outbox (match_id, recipient_user_id, kind, dedupe_key)
+values ((select id from public.matches where user_low = '00000000-0000-0000-0000-000000000017'), '00000000-0000-0000-0000-000000000017', 'match_found', 'cancel-revision');
+update public.trips
+set revision = revision + 1
+where user_id = '00000000-0000-0000-0000-000000000017';
+set local role service_role;
+select set_config('request.jwt.claim.role', 'service_role', true);
+create temporary table cancel_claim on commit drop as
+select public.claim_notification_batch('00000000-0000-0000-0000-0000000000a1', 50, 120) as payload;
+select is(
+  jsonb_array_length((select payload->'claims' from cancel_claim)),
+  0,
+  'a revision-stale notification is not claimed'
+);
+select is(
+  (select payload->>'cancelled' from cancel_claim),
+  '1',
+  'a revision-stale notification is reported cancelled'
+);
+select is(
+  (select status from public.notification_outbox where dedupe_key = 'cancel-revision'),
+  'cancelled',
+  'a revision-stale notification is cancelled atomically'
+);
+
+reset role;
+delete from public.notification_outbox;
+insert into public.notification_outbox (match_id, recipient_user_id, kind, dedupe_key)
+values ((select id from public.matches where user_low = '00000000-0000-0000-0000-000000000011'), '00000000-0000-0000-0000-000000000011', 'match_found', 'retry-key');
+set local role service_role;
+select set_config('request.jwt.claim.role', 'service_role', true);
+create temporary table retry_first on commit drop as
+select public.claim_notification_batch('00000000-0000-0000-0000-0000000000a1', 50, 120) as payload;
+select is(
+  (select payload->'claims'->0->>'id' from retry_first),
+  (select id::text from public.notification_outbox where dedupe_key = 'retry-key'),
+  'a claim returns the queued notification id'
+);
+select ok(
+  public.fail_notification(
+    (select id from public.notification_outbox where dedupe_key = 'retry-key'),
+    '00000000-0000-0000-0000-0000000000a1',
+    'Resend returned 429'
+  ),
+  'a rate-limited delivery fails under its owning lease'
+);
+select is(
+  (select status from public.notification_outbox where dedupe_key = 'retry-key'),
+  'pending',
+  'a failed notification returns to pending'
+);
+select is(
+  (select attempt_count from public.notification_outbox where dedupe_key = 'retry-key'),
+  1,
+  'a failed notification keeps its attempt count'
+);
+select is(
+  (select last_error from public.notification_outbox where dedupe_key = 'retry-key'),
+  'Resend returned 429',
+  'a failed notification records its error'
+);
+select ok(
+  (select available_at > now() from public.notification_outbox where dedupe_key = 'retry-key'),
+  'a failed notification backs off before retry'
+);
+create temporary table retry_blocked on commit drop as
+select public.claim_notification_batch('00000000-0000-0000-0000-0000000000b1', 50, 120) as payload;
+select is(
+  jsonb_array_length((select payload->'claims' from retry_blocked)),
+  0,
+  'a backed-off notification is not claimed early'
+);
+reset role;
+update public.notification_outbox set available_at = now() where dedupe_key = 'retry-key';
+set local role service_role;
+select set_config('request.jwt.claim.role', 'service_role', true);
+create temporary table retry_second on commit drop as
+select public.claim_notification_batch('00000000-0000-0000-0000-0000000000b1', 50, 120) as payload;
+select is(
+  (select payload->'claims'->0->>'id' from retry_second),
+  (select id::text from public.notification_outbox where dedupe_key = 'retry-key'),
+  'a retry reclaims the same queue row'
+);
+select is(
+  (select attempt_count from public.notification_outbox where dedupe_key = 'retry-key'),
+  2,
+  'a retry increments the attempt count'
+);
+select ok(
+  not public.fail_notification(
+    (select id from public.notification_outbox where dedupe_key = 'retry-key'),
+    '00000000-0000-0000-0000-0000000000a1',
+    'stale worker'
+  ),
+  'a stale worker cannot fail a row owned by another lease'
+);
+select ok(
+  public.fail_notification(
+    (select id from public.notification_outbox where dedupe_key = 'retry-key'),
+    '00000000-0000-0000-0000-0000000000b1',
+    'Resend returned 500'
+  ),
+  'the owning worker can fail its lease'
+);
+select is(
+  (select last_error from public.notification_outbox where dedupe_key = 'retry-key'),
+  'Resend returned 500',
+  'a server error updates retry metadata'
+);
+
+reset role;
+delete from public.notification_outbox;
+insert into public.notification_outbox (match_id, recipient_user_id, kind, dedupe_key)
+values ((select id from public.matches where user_low = '00000000-0000-0000-0000-000000000013'), '00000000-0000-0000-0000-000000000013', 'match_found', 'lease-key');
+set local role service_role;
+select set_config('request.jwt.claim.role', 'service_role', true);
+create temporary table lease_first on commit drop as
+select public.claim_notification_batch('00000000-0000-0000-0000-0000000000a1', 1, 30) as payload;
+reset role;
+update public.notification_outbox set leased_until = now() - interval '1 second' where dedupe_key = 'lease-key';
+set local role service_role;
+select set_config('request.jwt.claim.role', 'service_role', true);
+create temporary table lease_second on commit drop as
+select public.claim_notification_batch('00000000-0000-0000-0000-0000000000b1', 1, 120) as payload;
+select is(
+  (select payload->'claims'->0->>'id' from lease_second),
+  (select id::text from public.notification_outbox where dedupe_key = 'lease-key'),
+  'an expired lease is reclaimed'
+);
+select is(
+  (select lease_token from public.notification_outbox where dedupe_key = 'lease-key'),
+  '00000000-0000-0000-0000-0000000000b1',
+  'an expired lease transfers ownership'
+);
+select is(
+  (select attempt_count from public.notification_outbox where dedupe_key = 'lease-key'),
+  2,
+  'reclaiming an expired lease records another attempt'
+);
+select ok(
+  not public.complete_notification(
+    (select id from public.notification_outbox where dedupe_key = 'lease-key'),
+    '00000000-0000-0000-0000-0000000000a1'
+  ),
+  'the original worker cannot complete after reclaim'
+);
+select ok(
+  public.complete_notification(
+    (select id from public.notification_outbox where dedupe_key = 'lease-key'),
+    '00000000-0000-0000-0000-0000000000b1'
+  ),
+  'the reclaiming worker completes the delivery'
+);
+
+reset role;
+delete from public.notification_outbox;
+insert into public.notification_outbox (match_id, recipient_user_id, kind, dedupe_key)
+values ((select id from public.matches where user_low = '00000000-0000-0000-0000-000000000011'), '00000000-0000-0000-0000-000000000011', 'match_found', 'idem-key');
+set local role service_role;
+select set_config('request.jwt.claim.role', 'service_role', true);
+create temporary table idem_first on commit drop as
+select public.claim_notification_batch('00000000-0000-0000-0000-0000000000a1', 1, 120) as payload;
+select is(
+  (select payload->'claims'->0->>'id' from idem_first),
+  (select id::text from public.notification_outbox where dedupe_key = 'idem-key'),
+  'the claim id is the stable Resend idempotency key'
+);
+select ok(
+  public.fail_notification(
+    (select id from public.notification_outbox where dedupe_key = 'idem-key'),
+    '00000000-0000-0000-0000-0000000000a1',
+    'Resend returned 429'
+  ),
+  'the first idempotent attempt fails'
+);
+reset role;
+update public.notification_outbox set available_at = now() where dedupe_key = 'idem-key';
+set local role service_role;
+select set_config('request.jwt.claim.role', 'service_role', true);
+create temporary table idem_second on commit drop as
+select public.claim_notification_batch('00000000-0000-0000-0000-0000000000a1', 1, 120) as payload;
+select is(
+  (select payload->'claims'->0->>'id' from idem_second),
+  (select payload->'claims'->0->>'id' from idem_first),
+  'a replay returns the same queue id for the same idempotency key'
+);
+select ok(
+  public.complete_notification(
+    (select id from public.notification_outbox where dedupe_key = 'idem-key'),
+    '00000000-0000-0000-0000-0000000000a1'
+  ),
+  'the replayed delivery completes'
+);
+select is(
+  (select status from public.notification_outbox where dedupe_key = 'idem-key'),
+  'sent',
+  'the completed row is terminal'
+);
+reset role;
+select throws_ok(
+  $$ insert into public.notification_outbox (match_id, recipient_user_id, kind, dedupe_key)
+     values ((select id from public.matches where user_low = '00000000-0000-0000-0000-000000000011'), '00000000-0000-0000-0000-000000000011', 'match_found', 'idem-key') $$,
+  '23505'::char(5),
+  NULL,
+  'a duplicate dedupe key cannot enqueue twice'
+);
+
+reset role;
+delete from public.notification_outbox;
+insert into public.notification_outbox (match_id, recipient_user_id, kind, dedupe_key)
+values ((select id from public.matches where user_low = '00000000-0000-0000-0000-000000000013'), '00000000-0000-0000-0000-000000000014', 'match_found', 'worker-key');
+set local role service_role;
+select set_config('request.jwt.claim.role', 'service_role', true);
+create temporary table worker_a on commit drop as
+select public.claim_notification_batch('00000000-0000-0000-0000-0000000000a1', 50, 120) as payload;
+select is(
+  jsonb_array_length((select payload->'claims' from worker_a)),
+  1,
+  'the first worker claims the ready row'
+);
+create temporary table worker_b on commit drop as
+select public.claim_notification_batch('00000000-0000-0000-0000-0000000000b1', 50, 120) as payload;
+select is(
+  jsonb_array_length((select payload->'claims' from worker_b)),
+  0,
+  'a second worker cannot double-claim a live lease'
+);
+select ok(
+  not public.complete_notification(
+    (select id from public.notification_outbox where dedupe_key = 'worker-key'),
+    '00000000-0000-0000-0000-0000000000b1'
+  ),
+  'the second worker cannot complete the first worker lease'
+);
+select ok(
+  public.complete_notification(
+    (select id from public.notification_outbox where dedupe_key = 'worker-key'),
+    '00000000-0000-0000-0000-0000000000a1'
+  ),
+  'the owning worker completes without a duplicate send'
+);
+create temporary table worker_c on commit drop as
+select public.claim_notification_batch('00000000-0000-0000-0000-0000000000c1', 50, 120) as payload;
+select is(
+  jsonb_array_length((select payload->'claims' from worker_c)),
+  0,
+  'a completed row is never reclaimed'
 );
 
 reset role;
