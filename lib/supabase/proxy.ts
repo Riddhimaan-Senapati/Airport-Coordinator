@@ -2,17 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 import type { Database } from "../database.types";
-
-function getPublicConfig() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-
-  if (!url || !publishableKey) {
-    throw new Error("Supabase public environment variables are not configured.");
-  }
-
-  return { publishableKey, url };
-}
+import { getPublicConfig } from "./public-config";
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
