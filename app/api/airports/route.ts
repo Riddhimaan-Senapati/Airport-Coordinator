@@ -1,8 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getIdentity } from "@/lib/supabase/server";
 
 const MAX_QUERY_LENGTH = 100;
+const MIN_QUERY_LENGTH = 2;
 const RESULT_LIMIT = 10;
 
 export async function GET(request: NextRequest) {
@@ -15,13 +16,11 @@ export async function GET(request: NextRequest) {
     );
   }
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
+  const identity = await getIdentity(supabase);
+  if (!identity) {
     return NextResponse.json({ error: "Authentication required." }, { status: 401 });
   }
-  if (!query) {
+  if (query.length < MIN_QUERY_LENGTH) {
     return NextResponse.json(
       { airports: [] },
       { headers: { "Cache-Control": "private, no-store" } },

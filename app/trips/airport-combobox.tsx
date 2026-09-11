@@ -13,6 +13,11 @@ export type AirportOption = {
 type AirportSearchResponse = { airports: AirportOption[] };
 
 const SEARCH_DELAY_MS = 200;
+const MIN_QUERY_LENGTH = 2;
+
+export function shouldSearchAirport(query: string) {
+  return query.trim().length >= MIN_QUERY_LENGTH;
+}
 
 function airportLabel(airport: AirportOption) {
   const place = [airport.municipality, airport.countryCode].filter(Boolean).join(", ");
@@ -34,7 +39,7 @@ export function AirportCombobox({ initialAirport }: { initialAirport: AirportOpt
   const activeAirport = results[activeIndex];
 
   useEffect(() => {
-    if (!open || selectedAirport || !query.trim()) {
+    if (!open || selectedAirport || !shouldSearchAirport(query)) {
       return;
     }
 
@@ -103,7 +108,7 @@ export function AirportCombobox({ initialAirport }: { initialAirport: AirportOpt
           const nextQuery = event.currentTarget.value;
           setQuery(nextQuery);
           setSelectedAirport(undefined);
-          if (!nextQuery.trim()) {
+          if (!shouldSearchAirport(nextQuery)) {
             setResults([]);
             setLoading(false);
           }

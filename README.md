@@ -62,14 +62,15 @@ When the schema changes, regenerate `lib/database.types.ts` from the same Supaba
 
 ## Refresh the airport catalog
 
-The committed catalog comes from the public-domain OurAirports dataset. Refresh the generated file and import it:
+The catalog comes from the public-domain OurAirports dataset. Download and import it in one bounded-memory pass:
 
 ```powershell
-npm run data:airports:sync
 npm run data:airports:import
 ```
 
-The sync command downloads the current airport and country files. It derives an IANA timezone from each airport's coordinates and writes `data/airports.json`. The import command writes every batch to one immutable generation. After every batch succeeds, one database transaction changes the active-generation pointer. Searches continue using the prior complete generation until that change. The importer then removes unreferenced rows from older generations in bounded batches.
+The command streams the country list into a small code-to-name map, then streams airport rows through normalization in 1,000-row batches. It derives an IANA timezone from each airport's coordinates and never writes an intermediate catalog file. Every batch lands in one immutable generation. After every batch succeeds, one database transaction changes the active-generation pointer. Searches continue using the prior complete generation until that change. The importer then removes unreferenced rows from older generations in bounded batches.
+
+Pass `--airports`, `--countries`, `--batch-size`, `--prune-batch-size`, `--attempts`, or `--retry-delay-ms` to override the defaults.
 
 ## Architecture
 
@@ -107,7 +108,6 @@ Create a Supabase project and a separate hosting environment for the Next.js app
 6. Import the current airport catalog with the production project URL and service-role key loaded in the shell:
 
    ```powershell
-   npm run data:airports:sync
    npm run data:airports:import
    ```
 

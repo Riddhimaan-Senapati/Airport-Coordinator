@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { getTextField } from "../../lib/form-data";
-import { createClient } from "../../lib/supabase/server";
+import { createClient, getIdentity } from "../../lib/supabase/server";
 import { deleteTripForUser, saveTripAndFindMatches, setContactConsent } from "../../lib/trips";
 import { contactConsentSchema, tripInputSchema } from "../../lib/validation";
 
@@ -15,15 +15,16 @@ export type TripActionState =
 
 async function requireUser() {
   const supabase = await createClient();
-  const { data, error } = await supabase.auth.getUser();
-  if (error || !data.user) redirect("/auth/signin");
+  const identity = await getIdentity(supabase);
+  if (!identity) redirect("/auth/signin");
+  return supabase;
 }
 
 export async function saveTrip(
   _state: TripActionState,
   formData: FormData,
 ): Promise<TripActionState> {
-  await requireUser();
+  const supabase = await requireUser();
   const parsed = tripInputSchema.safeParse({
     airportId: formData.get("airportId"),
     arrivalAtUtc: formData.get("arrivalAtUtc"),
@@ -37,7 +38,7 @@ export async function saveTrip(
   }
 
   try {
-    await saveTripAndFindMatches({ trip: parsed.data });
+    await saveTripAndFindMatches({ supabase, trip: parsed.data });
     revalidatePath("/trips");
     return { status: "success", message: "Your trip is saved." };
   } catch {
@@ -46,13 +47,13 @@ export async function saveTrip(
 }
 
 export async function deleteTrip() {
-  await requireUser();
-  await deleteTripForUser();
+  const supabase = await requireUser();
+  await deleteTripForUser(supabase);
   revalidatePath("/trips");
 }
 
 export async function changeContactConsent(formData: FormData) {
-  await requireUser();
+  const supabase = await requireUser();
   const parsed = contactConsentSchema.safeParse({
     matchId: getTextField(formData, "matchId"),
     decision: getTextField(formData, "decision"),
@@ -60,6 +61,7 @@ export async function changeContactConsent(formData: FormData) {
   if (!parsed.success) return;
 
   await setContactConsent({
+    supabase,
     matchId: parsed.data.matchId,
     consent: parsed.data.decision === "accept",
   });

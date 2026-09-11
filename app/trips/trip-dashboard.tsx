@@ -1,18 +1,9 @@
-"use client";
-
-import type { FormEvent } from "react";
-
 import type { MatchView, TripDashboard as DashboardData } from "../../lib/trips";
-import { changeContactConsent, deleteTrip } from "./actions";
+import { changeContactConsent } from "./actions";
+import { CancelTripButton } from "./cancel-trip-button";
 
 export function TripDashboard({ dashboard }: { dashboard: DashboardData }) {
   if (!dashboard.trip) return null;
-
-  function confirmCancellation(event: FormEvent<HTMLFormElement>) {
-    if (!window.confirm("Cancel this trip and remove its matches?")) {
-      event.preventDefault();
-    }
-  }
 
   return (
     <div className="space-y-6">
@@ -31,11 +22,7 @@ export function TripDashboard({ dashboard }: { dashboard: DashboardData }) {
               {dashboard.trip.waitHours === 1 ? "hour" : "hours"}
             </p>
           </div>
-          <form action={deleteTrip} onSubmit={confirmCancellation}>
-            <button className="button-secondary" type="submit">
-              Cancel trip
-            </button>
-          </form>
+          <CancelTripButton />
         </div>
       </section>
 

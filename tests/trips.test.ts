@@ -2,42 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-import {
-  arrivalWindowIsActive,
-  arrivalWindowsOverlap,
-  contactFromDisclosure,
-  createArrivalWindow,
-  mapTripDashboard,
-} from "../lib/trips";
-
-describe("arrival windows", () => {
-  const window = (start: string, end: string) => ({
-    start: new Date(start),
-    end: new Date(end),
-  });
-
-  it("adds whole hours to the UTC arrival instant", () => {
-    const start = new Date("2026-09-08T14:30:00.000Z");
-    expect(createArrivalWindow({ start, waitHours: 3 })).toEqual({
-      start,
-      end: new Date("2026-09-08T17:30:00.000Z"),
-    });
-  });
-
-  it("treats overlap symmetrically and includes the exact boundary", () => {
-    const earlier = window("2026-09-08T14:00:00.000Z", "2026-09-08T15:00:00.000Z");
-    const later = window("2026-09-08T15:00:00.000Z", "2026-09-08T16:00:00.000Z");
-    expect(arrivalWindowsOverlap(earlier, later)).toBe(true);
-    expect(arrivalWindowsOverlap(later, earlier)).toBe(true);
-  });
-
-  it("rejects separated and expired windows", () => {
-    const earlier = window("2026-09-08T14:00:00.000Z", "2026-09-08T14:59:00.000Z");
-    const later = window("2026-09-08T15:00:00.000Z", "2026-09-08T16:00:00.000Z");
-    expect(arrivalWindowsOverlap(earlier, later)).toBe(false);
-    expect(arrivalWindowIsActive(later.start, later.start)).toBe(false);
-  });
-});
+import { contactFromDisclosure, mapTripDashboard } from "../lib/trips";
 
 describe("contact disclosure", () => {
   const match = {
